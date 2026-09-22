@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>4SF Par 3 Challenge</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #0a2612; color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+    header { padding: 12px 16px; text-align: center; background: rgba(0,0,0,0.25); }
+    header h1 { margin: 0; font-size: 20px; color: #facc15; letter-spacing: 1px; }
+    header .sub { font-size: 13px; color: #facc15; font-weight: bold; margin-top: 2px; }
+    header .date { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+
+    #game-wrap { display: flex; justify-content: center; padding: 8px; }
+    #game {
+      width: 400px; max-width: 100%; height: 700px; max-height: 95vw;
+      border: 0; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      background: #111;
+    }
+
+    #leaderboard { padding: 12px 16px 48px; }
+    .lb-tab { display: flex; gap: 8px; margin-bottom: 12px; }
+    .lb-tab button {
+      flex: 1; padding: 9px; border: 0; border-radius: 8px;
+      background: rgba(255,255,255,0.08); color: #fff; font-weight: bold; cursor: pointer;
+    }
+    .lb-tab button.active { background: #facc15; color: #0a2612; }
+    .lb-row {
+      display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+      border-radius: 8px; background: rgba(255,255,255,0.05); margin-bottom: 6px;
+    }
+    .lb-row.me { background: rgba(250,204,21,0.18); border: 1px solid #facc15; }
+    .lb-rank { width: 30px; font-weight: bold; color: #facc15; }
+    .lb-name { flex: 1; font-weight: 600; }
+    .lb-dist { font-weight: bold; }
+    .lb-ace { font-size: 11px; background: #facc15; color: #0a2612; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+    .hint { font-size: 12px; color: rgba(255,255,255,0.45); }
+    .login-btn {
+      margin: 8px 0; padding: 13px; width: 100%; border: 0; border-radius: 10px;
+      background: #facc15; color: #0a2612; font-weight: 800; font-size: 15px; cursor: pointer;
+    }
+
+    #overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
+    .result-overlay {
+      position: absolute; inset: 0; background: rgba(10,38,18,0.97);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 20px; text-align: center; pointer-events: auto; overflow-y: auto;
+    }
+    .result-overlay h2 { font-size: 24px; color: #facc15; margin: 0 0 12px; }
+    .result-stats { display: flex; gap: 28px; margin-bottom: 18px; }
+    .result-stats .big { font-size: 38px; font-weight: 800; color: #facc15; }
+    .result-stats .lbl { font-size: 11px; color: rgba(255,255,255,0.6); }
+    .share-btn {
+      margin: 6px 0; padding: 13px 24px; border: 0; border-radius: 10px;
+      background: #facc15; color: #0a2612; font-weight: 800; cursor: pointer; width: 100%; max-width: 300px;
+    }
+    .replay-btn {
+      margin-top: 8px; padding: 11px 20px; border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px; background: transparent; color: #fff; font-weight: bold; cursor: pointer;
+    }
+    .replay-warn { font-size: 12px; color: rgba(255,255,255,0.75); margin: 8px 0; line-height: 1.4; max-width: 300px; }
+
+    #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0a2612; z-index: 100; }
+    #boot .spin { width: 34px; height: 34px; border: 4px solid #facc15; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="boot"><div class="spin"></div></div>
+  <div id="app" style="display:none">
+    <header>
+      <h1 id="heading">Daily Par 3</h1>
+      <div class="sub" id="subtitle" style="display:none"></div>
+      <div class="date" id="date-label"></div>
+    </header>
+    <div id="game-wrap">
+      <iframe id="game" title="Par 3 Challenge"></iframe>
+    </div>
+    <div id="leaderboard"></div>
+  </div>
+  <div id="overlay"></div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
