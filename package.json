@@ -1,0 +1,18 @@
+{
+  "name": "4sf-minigame-sidecar",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "4SF Par 3 Challenge — decoupled sidecar frontend, hosted on Vercel, sharing the Foursome Finder Base44 backend + unified auth.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@base44/sdk": "^0.8.11"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
