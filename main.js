@@ -87,7 +87,15 @@ async function main() {
   const guestId = getGuestId();
   const guestDisplayName = getGuestDisplayName(guestId);
 
-  document.getElementById('date-label').textContent = `${dateLabel} · Closest to the Pin`;
+  // Check for a `?date=YYYY-MM-DD` param — used by admin to view past holes.
+  // When present and not today, the game renders in view-only mode with that
+  // date's conditions and leaderboard.
+  const urlDateParam = new URLSearchParams(window.location.search).get('date');
+  const isPastDate = urlDateParam && urlDateParam !== dailySeed;
+
+  document.getElementById('date-label').textContent = isPastDate
+    ? `${urlDateParam} · Past Challenge`
+    : `${dateLabel} · Closest to the Pin`;
 
   // Read the auth token from the URL hash (passed by the parent iframe).
   // This is the primary, most reliable method — no postMessage round-trip or
@@ -145,24 +153,35 @@ async function main() {
   let hallOfFame = [];
   let memberPlayedToday = false, hasReplayed = false;
 
-  try {
-    const lb = await client.functions.invoke('get-daily-leaderboard', { anonymous_id: isMember ? undefined : guestId });
-    leaderboard = lb.data || leaderboard;
-    if (isMember && leaderboard.ownScore) {
-      memberPlayedToday = true;
-      hasReplayed = !!leaderboard.ownScore.has_replayed;
-    }
-  } catch { /* silent */ }
+  if (isPastDate) {
+    // View-only mode: fetch the past date's config + leaderboard
+    try {
+      const r = await client.functions.invoke('get-past-leaderboard', { date: urlDateParam });
+      if (r.data) {
+        gameConfig = r.data.gameConfig || gameConfig;
+        leaderboard = { top20: (r.data.leaderboard && r.data.leaderboard.top20) || [], ownScore: null };
+      }
+    } catch { /* silent */ }
+  } else {
+    try {
+      const lb = await client.functions.invoke('get-daily-leaderboard', { anonymous_id: isMember ? undefined : guestId });
+      leaderboard = lb.data || leaderboard;
+      if (isMember && leaderboard.ownScore) {
+        memberPlayedToday = true;
+        hasReplayed = !!leaderboard.ownScore.has_replayed;
+      }
+    } catch { /* silent */ }
 
-  try {
-    const c = await client.functions.invoke('get-daily-game-config', {});
-    if (c.data) gameConfig = c.data;
-  } catch { /* silent */ }
+    try {
+      const c = await client.functions.invoke('get-daily-game-config', {});
+      if (c.data) gameConfig = c.data;
+    } catch { /* silent */ }
 
-  try {
-    const h = await client.functions.invoke('get-hall-of-fame', {});
-    hallOfFame = (h.data && h.data.hallOfFame) || [];
-  } catch { /* silent */ }
+    try {
+      const h = await client.functions.invoke('get-hall-of-fame', {});
+      hallOfFame = (h.data && h.data.hallOfFame) || [];
+    } catch { /* silent */ }
+  }
 
   function applyHeading() {
     const yardage = gameConfig.conditions && gameConfig.conditions.yardage
@@ -218,6 +237,7 @@ async function main() {
   iframe.srcdoc = gameHtml;
 
   async function submitSession(shots) {
+    if (isPastDate) return; // view-only mode — no scores for past dates
     const distances = shots.map(s => s.distance);
     const best_distance = Math.min(...distances);
     const ace_count = shots.filter(s => s.isHoleInOne).length;
@@ -296,15 +316,50 @@ async function main() {
 
   function renderLeaderboard() {
     const root = document.getElementById('leaderboard');
-    let html = '<div class="lb-tab"><button id="tab-today" class="active">Today</button><button id="tab-hof">Hall of Fame</button></div>';
+    let html = '<div class="lb-tab"><button id="tab-today" class="active">Today</button><button id="tab-past">Past</button><button id="tab-hof">Hall of Fame</button></div>';
     html += '<div id="lb-body"></div>';
-    if (!isMember) {
+    if (!isMember && !isPastDate) {
       html += '<button class="login-btn" id="claim-btn">Sign up to post your score</button>'
         + '<p class="hint">Your guest session is held until midnight. Sign up to claim it.</p>';
     }
     root.innerHTML = html;
 
-    let tab = 'today';
+    let tab = isPastDate ? 'past' : 'today';
+
+    async function loadPastBody(selectedDate) {
+      const b = document.getElementById('lb-body');
+      if (!selectedDate) {
+        b.innerHTML = '<input type="date" id="past-date" max="' + new Date().toISOString().slice(0,10) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff;font-size:14px;margin-bottom:10px" />'
+          + '<p class="hint">Pick a date to see that day\'s leaderboard.</p>';
+        const dp = document.getElementById('past-date');
+        if (dp) dp.onchange = () => loadPastBody(dp.value);
+        return;
+      }
+      b.innerHTML = '<p class="hint">Loading...</p>';
+      try {
+        const r = await client.functions.invoke('get-past-leaderboard', { date: selectedDate });
+        const d = r.data;
+        if (!d) { b.innerHTML = '<p class="hint">No data for this date.</p>'; return; }
+        let rows = '<input type="date" id="past-date" value="' + selectedDate + '" max="' + new Date().toISOString().slice(0,10) + '" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:#fff;font-size:14px;margin-bottom:10px" />';
+        const top20 = (d.leaderboard && d.leaderboard.top20) || [];
+        const winner = d.winner;
+        if (winner) {
+          rows += `<div class="lb-row" style="background:rgba(250,204,21,0.18);border:1px solid #facc15"><div class="lb-rank">🏆</div><div class="lb-name">${escapeHtml(winner.player_name)}<span class="lb-ace">WIN</span></div><div class="lb-dist">${winner.is_hole_in_one ? 'HIO' : winner.distance + ' ft'}</div></div>`;
+        }
+        if (top20.length === 0 && !winner) {
+          rows += '<p class="hint">No scores for this date.</p>';
+        }
+        top20.forEach(e => {
+          rows += `<div class="lb-row"><div class="lb-rank">#${e.rank}</div><div class="lb-name">${escapeHtml(e.player_name)}</div><div class="lb-dist">${e.is_hole_in_one ? 'HIO' : e.distance + ' ft'}</div></div>`;
+        });
+        b.innerHTML = rows;
+        const dp = document.getElementById('past-date');
+        if (dp) dp.onchange = () => loadPastBody(dp.value);
+      } catch {
+        b.innerHTML = '<p class="hint">Could not load past leaderboard.</p>';
+      }
+    }
+
     function body() {
       const b = document.getElementById('lb-body');
       if (tab === 'today') {
@@ -321,7 +376,7 @@ async function main() {
           rows += `<div class="lb-row me"><div class="lb-rank">#${o.rank}</div><div class="lb-name">You${o.is_hole_in_one ? '<span class="lb-ace">ACE</span>' : ''}</div><div class="lb-dist">${o.is_hole_in_one ? 'HIO' : o.distance + ' ft'}</div></div>`;
         }
         b.innerHTML = rows;
-      } else {
+      } else if (tab === 'hof') {
         let rows = '';
         if (hallOfFame.length === 0) {
           rows = '<p class="hint">No champions yet. Win a day to claim the Hall of Fame!</p>';
@@ -330,21 +385,26 @@ async function main() {
           rows += `<div class="lb-row"><div class="lb-rank">${i + 1}</div><div class="lb-name">${escapeHtml(p.player_name)}</div><div class="lb-dist">${p.win_count} win${p.win_count === 1 ? '' : 's'}</div></div>`;
         });
         b.innerHTML = rows;
+      } else {
+        // Past tab
+        loadPastBody(isPastDate ? urlDateParam : '');
       }
     }
+    function setTab(t) {
+      tab = t;
+      ['today', 'past', 'hof'].forEach(id => {
+        const el = document.getElementById('tab-' + id);
+        if (el) el.classList.toggle('active', id === t);
+      });
+      body();
+    }
     body();
-    document.getElementById('tab-today').onclick = () => {
-      tab = 'today';
-      document.getElementById('tab-today').classList.add('active');
-      document.getElementById('tab-hof').classList.remove('active');
-      body();
-    };
-    document.getElementById('tab-hof').onclick = () => {
-      tab = 'hof';
-      document.getElementById('tab-hof').classList.add('active');
-      document.getElementById('tab-today').classList.remove('active');
-      body();
-    };
+    const todayBtn = document.getElementById('tab-today');
+    if (todayBtn) todayBtn.onclick = () => setTab('today');
+    const pastBtn = document.getElementById('tab-past');
+    if (pastBtn) pastBtn.onclick = () => setTab('past');
+    const hofBtn = document.getElementById('tab-hof');
+    if (hofBtn) hofBtn.onclick = () => setTab('hof');
     const claim = document.getElementById('claim-btn');
     if (claim) claim.onclick = () => client.auth.redirectToLogin(window.location.href);
   }
