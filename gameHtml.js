@@ -326,7 +326,17 @@ const minigameHtml = `<!DOCTYPE html>
 
         // Wind: server gives speed (mph) + angle (degrees).
         wind.speed = (conditions && typeof conditions.windSpeed === "number") ? conditions.windSpeed : Math.floor(Math.random() * 12) + 4;
-        wind.angle = (conditions && typeof conditions.windAngleDeg === "number") ? (conditions.windAngleDeg * Math.PI / 180) : Math.random() * Math.PI * 2;
+        if (conditions && typeof conditions.windAngleDeg === "number") {
+            wind.angle = conditions.windAngleDeg * Math.PI / 180;
+        } else {
+            // Fallback: never blow straight up/down — keep at least 25° off vertical
+            // so every shot drifts left-to-right or right-to-left.
+            let deg = Math.floor(Math.random() * 360);
+            const VA = 25;
+            if (deg > 90 - VA && deg < 90 + VA) deg = deg < 90 ? 90 - VA : 90 + VA;
+            else if (deg > 270 - VA && deg < 270 + VA) deg = deg < 270 ? 270 - VA : 270 + VA;
+            wind.angle = deg * Math.PI / 180;
+        }
 
         holeHeader.innerText = "Hole " + activeHole.name + " - " + yardage + " Yards";
         resetGame();
@@ -688,10 +698,9 @@ const minigameHtml = `<!DOCTYPE html>
             ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.textAlign = 'left';
             for (let yds = 0; yds <= maxDistance; yds += 20) {
                 const yPos = meterY + meterH - (yds / maxDistance) * meterH;
-                const isTarget = (yds === hole.yardage);
                 ctx.beginPath(); ctx.moveTo(meterX + meterW, yPos); ctx.lineTo(meterX + meterW + 10, yPos);
-                ctx.strokeStyle = isTarget ? '#ffea00' : '#fff'; ctx.lineWidth = isTarget ? 3 : 1; ctx.stroke();
-                ctx.fillStyle = isTarget ? '#ffea00' : '#aaa';
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+                ctx.fillStyle = '#aaa';
                 if (yds > 0) ctx.fillText(yds, meterX + meterW + 15, yPos + 4);
             }
             let currentPower = (gameState === 1) ? meter.powerValue : (gameState >= 2 ? meter.finalPower : 0);
