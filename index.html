@@ -22,12 +22,23 @@
     header .sub { font-size: 13px; color: #facc15; font-weight: bold; margin-top: 2px; }
     header .date { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
 
-    #game-wrap { display: flex; justify-content: center; padding: 0; }
+    #game-wrap { position: relative; display: flex; justify-content: center; padding: 0; }
     #game {
       width: 100%; height: calc(100vh - 52px);
       border: 0; border-radius: 0; box-shadow: none;
       background: #111;
     }
+    #scroll-bar {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 44px; z-index: 10;
+      background: linear-gradient(to right, rgba(0,0,0,0.55), rgba(0,0,0,0.25));
+      border-right: 1px solid rgba(250,204,21,0.45);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 8px 0; cursor: grab; touch-action: none;
+    }
+    #scroll-bar.active { background: linear-gradient(to right, rgba(250,204,21,0.3), rgba(250,204,21,0.1)); }
+    .scroll-arrow { color: #facc15; font-size: 18px; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.9); padding: 2px 0; }
+    #scroll-track { flex: 1; width: 6px; background: rgba(250,204,21,0.15); border-radius: 3px; position: relative; margin: 4px 0; }
+    #scroll-thumb { position: absolute; left: -5px; width: 16px; height: 50px; background: rgba(250,204,21,0.8); border-radius: 8px; top: 0; }
     #lb-scroll-btn-wrap { display: flex; justify-content: center; padding: 12px 0; }
     #lb-scroll-btn {
       padding: 10px 28px; border: 1px solid rgba(250,204,21,0.4); border-radius: 999px;
@@ -101,6 +112,11 @@
     </header>
     <div id="game-wrap">
       <iframe id="game" title="Par 3 Challenge"></iframe>
+      <div id="scroll-bar">
+        <span class="scroll-arrow">↑</span>
+        <div id="scroll-track"><div id="scroll-thumb"></div></div>
+        <span class="scroll-arrow">↓</span>
+      </div>
     </div>
     <div id="lb-scroll-btn-wrap">
       <button id="lb-scroll-btn">Leaderboard ↓</button>
@@ -108,6 +124,44 @@
     <div id="leaderboard"></div>
   </div>
   <div id="overlay"></div>
+  <script>
+  (function() {
+    var bar = document.getElementById('scroll-bar');
+    if (!bar) return;
+    var isScrolling = false, startY = 0, startScroll = 0;
+    function getY(e) { return e.touches ? e.touches[0].clientY : e.clientY; }
+    function start(e) {
+      isScrolling = true; startY = getY(e); startScroll = window.scrollY;
+      bar.classList.add('active');
+      if (e.cancelable) e.preventDefault(); e.stopPropagation();
+    }
+    function move(e) {
+      if (!isScrolling) return;
+      if (e.cancelable) e.preventDefault(); e.stopPropagation();
+      window.scrollTo(0, Math.max(0, startScroll - (getY(e) - startY)));
+    }
+    function end() { if (!isScrolling) return; isScrolling = false; bar.classList.remove('active'); }
+    bar.addEventListener('touchstart', start, { passive: false });
+    bar.addEventListener('touchmove', move, { passive: false });
+    bar.addEventListener('touchend', end);
+    bar.addEventListener('touchcancel', end);
+    bar.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    var thumb = document.getElementById('scroll-thumb');
+    var track = document.getElementById('scroll-track');
+    function updateThumb() {
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max <= 0 || !track || !thumb) return;
+      var ratio = window.scrollY / max;
+      thumb.style.top = (ratio * (track.offsetHeight - thumb.offsetHeight)) + 'px';
+    }
+    window.addEventListener('scroll', updateThumb);
+    window.addEventListener('resize', updateThumb);
+    window.addEventListener('load', updateThumb);
+    setTimeout(updateThumb, 1000);
+  })();
+  </script>
   <script type="module" src="/main.js"></script>
 </body>
 </html>
