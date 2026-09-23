@@ -39,6 +39,48 @@ function getGuestDisplayName(gid) {
   for (let i = 0; i < gid.length; i++) h = ((h << 5) - h + gid.charCodeAt(i)) | 0;
   return `Guest ${String(Math.abs(h) % 10000).padStart(4, '0')}`;
 }
+// Compute conditions using the EXACT SAME PRNG sequence as the server, so even
+// when the server call fails, the game shows identical conditions. Always
+// deterministic per day — no randomness per refresh or per player.
+function mulberry32(seedStr) {
+  let a = 0;
+  for (let i = 0; i < seedStr.length; i++) a = (Math.imul(31, a) + seedStr.charCodeAt(i)) | 0;
+  a = a >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function deterministicConditions(seedStr) {
+  const rand = mulberry32(String(seedStr) + "|conditions");
+  const yardage = Math.round(105 + rand() * 90);
+  const pinNormX = (rand() * 1.4) - 0.7;
+  const pinNormY = (rand() * 1.4) - 0.7;
+  const windSpeed = Math.floor(rand() * 21);
+  let windAngleDeg = Math.floor(rand() * 360);
+  const VA = 25;
+  if (windAngleDeg > 90 - VA && windAngleDeg < 90 + VA) windAngleDeg = windAngleDeg < 90 ? 90 - VA : 90 + VA;
+  else if (windAngleDeg > 270 - VA && windAngleDeg < 270 + VA) windAngleDeg = windAngleDeg < 270 ? 270 - VA : 270 + VA;
+  const slopeX = (rand() * 0.006) - 0.003;
+  const slopeY = (rand() * 0.006) - 0.003;
+  return { yardage, pinNormX, pinNormY, windSpeed, windAngleDeg, slopeX, slopeY };
+}
+
+function getConfigCacheKey() { return `4sf_minigame_config_${getDailySeed()}`; }
+function loadCachedConfig() {
+  try {
+    const raw = localStorage.getItem(getConfigCacheKey());
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (d.daily_seed !== getDailySeed()) { localStorage.removeItem(getConfigCacheKey()); return null; }
+    return d.config;
+  } catch { return null; }
+}
+function saveCachedConfig(config) { try { localStorage.setItem(getConfigCacheKey(), JSON.stringify({ daily_seed: getDailySeed(), config })); } catch {} }
+
 function getHeldKey() { return `4sf_minigame_held_${getDailySeed()}`; }
 function loadHeld() {
   try {
@@ -174,8 +216,30 @@ async function main() {
 
     try {
       const c = await client.functions.invoke('get-daily-game-config', {});
-      if (c.data) gameConfig = c.data;
-    } catch { /* silent */ }
+      if (c.data) {
+        gameConfig = c.data;
+        saveCachedConfig(c.data);
+      }
+    } catch {
+      // Server call failed — use cached config, then local fallback.
+      const cached = loadCachedConfig();
+      if (cached) {
+        gameConfig = cached;
+      } else {
+        const seed = getDailySeed();
+        const dayJs = new Date();
+        const jsDay = dayJs.getDay();
+        const dow = jsDay === 0 ? 7 : jsDay;
+        gameConfig = {
+          dailyNumber: 0,
+          subtitle: '',
+          sponsorLink: '',
+          holeIndex: dow,
+          seed,
+          conditions: deterministicConditions(seed),
+        };
+      }
+    }
 
     try {
       const h = await client.functions.invoke('get-hall-of-fame', {});
