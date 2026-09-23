@@ -39,6 +39,12 @@ function getGuestDisplayName(gid) {
   for (let i = 0; i < gid.length; i++) h = ((h << 5) - h + gid.charCodeAt(i)) | 0;
   return `Guest ${String(Math.abs(h) % 10000).padStart(4, '0')}`;
 }
+function getGuestName() {
+  return localStorage.getItem('4sf_minigame_player_name') || '';
+}
+function saveGuestName(name) {
+  localStorage.setItem('4sf_minigame_player_name', name);
+}
 // Compute conditions using the EXACT SAME PRNG sequence as the server, so even
 // when the server call fails, the game shows identical conditions. Always
 // deterministic per day — no randomness per refresh or per player.
@@ -98,6 +104,34 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// First-time guests pick a display name before the game loads. Stored in
+// localStorage so returning visitors are remembered. No account required.
+async function ensureGuestName() {
+  if (getGuestName()) return;
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,38,18,0.98);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;padding:24px;text-align:center;';
+    overlay.innerHTML =
+      '<h2 style="color:#facc15;font-size:24px;margin:0 0 8px;">Welcome, Golfer!</h2>' +
+      '<p style="color:rgba(255,255,255,0.8);font-size:14px;margin:0 0 20px;max-width:280px;line-height:1.5;">Pick a name for the leaderboard. No account needed — just play!</p>' +
+      '<input id="guest-name-input" type="text" maxlength="20" placeholder="Your player name" style="width:100%;max-width:280px;padding:14px;border-radius:10px;border:1px solid rgba(250,204,21,0.4);background:rgba(0,0,0,0.4);color:#fff;font-size:16px;outline:none;text-align:center;" />' +
+      '<button id="guest-name-submit" style="margin-top:12px;padding:14px 32px;border:0;border-radius:10px;background:#facc15;color:#0a2612;font-weight:800;font-size:16px;cursor:pointer;width:100%;max-width:280px;">Start Playing</button>';
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#guest-name-input');
+    const btn = overlay.querySelector('#guest-name-submit');
+    input.focus();
+    function submit() {
+      const name = input.value.trim();
+      if (name.length < 2) { input.style.borderColor = '#ef4444'; return; }
+      saveGuestName(name);
+      overlay.remove();
+      resolve();
+    }
+    btn.onclick = submit;
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  });
+}
+
 // ── Auth pass-through: receive the member token from the FF parent iframe ──
 async function requestParentToken() {
   if (window.parent === window) return false; // standalone (direct visit)
@@ -120,6 +154,71 @@ async function requestParentToken() {
     // If the parent doesn't respond (e.g. not embedded in FF), proceed as guest.
     setTimeout(() => { if (!done) { done = true; window.removeEventListener('message', handler); resolve(false); } }, 2500);
   });
+}
+
+// ── Background music: "Morning Gold" during play, "The Quiet Stride" for the leaderboard ──
+const TRACKS = {
+  gameplay: 'https://media.base44.com/files/public/6a80e7c07aa31885a392902e/6d6b22e1d_Morning_Gold_on_Georgia_Soil.mp3',
+  leaderboard: 'https://media.base44.com/files/public/6a80e7c07aa31885a392902e/be4256818_The_Quiet_Stride.mp3',
+};
+let gameplayMusic = null, leaderboardMusic = null, musicStarted = false, musicMuted = false;
+
+function initMusic() {
+  if (gameplayMusic) return;
+  gameplayMusic = new Audio(TRACKS.gameplay);
+  gameplayMusic.loop = true;
+  gameplayMusic.volume = 0.35;
+  leaderboardMusic = new Audio(TRACKS.leaderboard);
+  leaderboardMusic.loop = true;
+  leaderboardMusic.volume = 0.55;
+}
+function startGameplayMusic() {
+  if (musicStarted) return;
+  musicStarted = true;
+  if (musicMuted) return;
+  initMusic();
+  if (!leaderboardMusic.paused) { leaderboardMusic.pause(); leaderboardMusic.currentTime = 0; }
+  gameplayMusic.play().catch(() => {});
+}
+function resumeGameplayMusic() {
+  if (musicMuted) return;
+  initMusic();
+  if (!leaderboardMusic.paused) leaderboardMusic.pause();
+  if (gameplayMusic.paused) gameplayMusic.play().catch(() => {});
+}
+function playLeaderboardMusic() {
+  if (musicMuted) return;
+  initMusic();
+  if (!gameplayMusic.paused) gameplayMusic.pause();
+  if (leaderboardMusic.paused) leaderboardMusic.play().catch(() => {});
+}
+function updateMuteBtn() {
+  const btn = document.getElementById('mute-btn');
+  if (btn) btn.textContent = musicMuted ? '🔇' : '🔊';
+}
+function toggleMute() {
+  musicMuted = !musicMuted;
+  initMusic();
+  gameplayMusic.muted = musicMuted;
+  leaderboardMusic.muted = musicMuted;
+  if (musicMuted) {
+    if (!gameplayMusic.paused) gameplayMusic.pause();
+    if (!leaderboardMusic.paused) leaderboardMusic.pause();
+  } else if (musicStarted) {
+    if (leaderboardMusic.paused) gameplayMusic.play().catch(() => {});
+  }
+  updateMuteBtn();
+}
+function buildMuteButton() {
+  const existing = document.getElementById('mute-btn');
+  if (existing) return;
+  const btn = document.createElement('button');
+  btn.id = 'mute-btn';
+  btn.textContent = '🔊';
+  btn.style.cssText = 'position:fixed;bottom:14px;right:14px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(10,38,18,0.85);color:#facc15;font-size:20px;z-index:200;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.45);';
+  btn.title = 'Toggle audio';
+  btn.onclick = toggleMute;
+  document.body.appendChild(btn);
 }
 
 async function main() {
@@ -158,42 +257,28 @@ async function main() {
   let user = null, isMember = false;
   try { user = await client.auth.me(); isMember = !!user; } catch { user = null; isMember = false; }
 
-  // If a guest played earlier today and is now a member, migrate the held session.
+  // If a returning guest is now a member, convert their server-side guest
+  // score to a member score (finds it by anonymous_id + today's date).
   if (isMember) {
-    const held = loadHeld();
-    if (held) {
-      try {
-        const r = await client.functions.invoke('migrate-guest-score', {
-          anonymous_id: held.anonymous_id,
-          best_distance: held.best_distance,
-          ace_count: held.ace_count,
-          shot_history: held.shot_history,
-          first_achieved_at: held.first_achieved_at,
-          daily_seed: held.daily_seed,
-          instagram_handle: held.instagram_handle || '',
-          x_handle: held.x_handle || '',
-          tiktok_handle: held.tiktok_handle || '',
-        });
-        if (r.data && r.data.migrated) {
-          // Persist the guest's captured handles onto the new member's profile
-          // so future score snapshots include them.
-          try {
-            await client.auth.updateMe({
-              instagram_handle: held.instagram_handle || '',
-              x_handle: held.x_handle || '',
-              tiktok_handle: held.tiktok_handle || '',
-            });
-          } catch { /* silent */ }
-          clearHeld();
-        }
-      } catch { /* silent */ }
-    }
+    try {
+      const r = await client.functions.invoke('migrate-guest-score', {
+        anonymous_id: guestId,
+      });
+      if (r.data && r.data.migrated) {
+        // Score was converted — leaderboard will reflect member status.
+      }
+    } catch { /* silent */ }
+  }
+
+  // Guest name gate — first-time visitors pick a name before the game loads.
+  if (!isMember && !isPastDate) {
+    await ensureGuestName();
   }
 
   let gameConfig = { dailyNumber: 0, subtitle: '', holeIndex: 1, seed: dailySeed, conditions: null };
   let leaderboard = { top20: [], ownScore: null };
   let hallOfFame = [];
-  let memberPlayedToday = false, hasReplayed = false;
+  let memberPlayedToday = false, hasReplayed = false, guestPlayedToday = false;
 
   if (isPastDate) {
     // View-only mode: fetch the past date's config + leaderboard
@@ -211,6 +296,8 @@ async function main() {
       if (isMember && leaderboard.ownScore) {
         memberPlayedToday = true;
         hasReplayed = !!leaderboard.ownScore.has_replayed;
+      } else if (!isMember && leaderboard.ownScore) {
+        guestPlayedToday = true;
       }
     } catch { /* silent */ }
 
@@ -270,6 +357,7 @@ async function main() {
   // Reveal the app now that data is ready.
   document.getElementById('boot').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  buildMuteButton();
 
   // ── Embed the Canvas game in a same-origin srcDoc iframe ─────────────────
   const iframe = document.getElementById('game');
@@ -283,7 +371,9 @@ async function main() {
       try { win.setShotsRemaining(sessionShots.length); } catch {}
       if (sessionShots.length >= SESSION_SHOTS) submitSession([...sessionShots]);
     };
+    win.onFirstInteraction = () => startGameplayMusic();
     win.onScrollToLeaderboard = () => {
+      playLeaderboardMusic();
       document.getElementById('leaderboard').scrollIntoView({ behavior: 'smooth' });
     };
     try { win.setDailyConditions(gameConfig.holeIndex || 1, gameConfig.seed || dailySeed, gameConfig.conditions); } catch {}
@@ -299,6 +389,16 @@ async function main() {
     try { win.setGameHeading(gameLabel, gameConfig.subtitle || ''); } catch {}
   });
   iframe.srcdoc = gameHtml;
+
+  // If the player already completed today's round, lock the game area.
+  // Members who still have a replay are NOT locked — they can play again.
+  if ((!isMember && guestPlayedToday) || (isMember && memberPlayedToday && hasReplayed)) {
+    const wrap = document.getElementById('game-wrap');
+    const locked = document.createElement('div');
+    locked.style.cssText = 'position:absolute;inset:0;background:rgba(10,38,18,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;z-index:5;pointer-events:auto;';
+    locked.innerHTML = '<h2 style="color:#facc15;font-size:22px;margin:0 0 10px;">You played today!</h2><p style="color:#fff;font-size:14px;max-width:280px;line-height:1.5;">Come back tomorrow for a new challenge. Scroll down to see today\'s leaderboard.</p>';
+    wrap.appendChild(locked);
+  }
 
   async function submitSession(shots) {
     if (isPastDate) return; // view-only mode — no scores for past dates
@@ -325,20 +425,33 @@ async function main() {
       return;
     }
 
-    // Guest: hold the session (same-day expiry) until they sign up.
-    saveHeld({
-      anonymous_id: guestId, best_distance, ace_count, shot_history: distances,
-      first_achieved_at, daily_seed: getDailySeed(), player_name: guestDisplayName,
-    });
-    sessionResult = { best_distance, ace_count, first_achieved_at };
-    sessionComplete = true;
-    renderAll();
+    // Guest: submit to server — score appears on the leaderboard immediately.
+    try {
+      const r = await client.functions.invoke('submit-game-score', {
+        shot_history: distances,
+        anonymous_id: guestId,
+        player_name: getGuestName(),
+      });
+      const d = r.data;
+      if (d && d.allowed) {
+        leaderboard = { top20: d.top20, ownScore: d.ownScore };
+        guestPlayedToday = true;
+        sessionComplete = true;
+        sessionResult = { best_distance, ace_count, first_achieved_at };
+        try { iframe.contentWindow.playCelebration(); } catch {}
+        renderAll();
+      } else if (d && d.lockedMessage) {
+        guestPlayedToday = true;
+        if (d.top20) leaderboard = { top20: d.top20, ownScore: d.ownScore };
+      }
+    } catch { /* silent */ }
   }
 
   function startReplay() {
     sessionShots.length = 0;
     sessionComplete = false;
     sessionResult = null;
+    resumeGameplayMusic();
     try { iframe.contentWindow.resetGame(); } catch {}
     try { iframe.contentWindow.setShotsRemaining(0); } catch {}
     renderAll();
@@ -369,7 +482,7 @@ async function main() {
   function showImageCard() {
     const isHoleInOne = sessionResult.best_distance === 0;
     shareCardImage({
-      playerName: isMember ? (user?.full_name || 'You') : guestDisplayName,
+      playerName: isMember ? (user?.full_name || 'You') : (getGuestName() || guestDisplayName),
       distance: sessionResult.best_distance,
       isHoleInOne,
       aceCount: sessionResult.ace_count,
@@ -383,8 +496,8 @@ async function main() {
     let html = '<div class="lb-tab"><button id="tab-today" class="active">Today</button><button id="tab-past">Past</button><button id="tab-hof">Hall of Fame</button></div>';
     html += '<div id="lb-body"></div>';
     if (!isMember && !isPastDate) {
-      html += '<button class="login-btn" id="claim-btn">Sign up to post your score</button>'
-        + '<p class="hint">Your guest session is held until midnight. Sign up to claim it.</p>';
+      html += '<button class="replay-btn" id="join-ff-lb-btn" style="margin:8px 0;padding:10px;border:1px solid rgba(250,204,21,0.4);border-radius:8px;background:rgba(250,204,21,0.1);color:#facc15;font-weight:bold;cursor:pointer;width:100%">Join Foursome Finder</button>'
+        + '<p class="hint">Find golf buddies and schedule rounds together.</p>';
     }
     root.innerHTML = html;
 
@@ -435,7 +548,7 @@ async function main() {
           const aceTag = e.is_hole_in_one ? '<span class="lb-ace">ACE</span>' : (e.ace_count > 1 ? `<span class="lb-ace">${e.ace_count}×</span>` : '');
           rows += `<div class="lb-row"><div class="lb-rank">#${e.rank}</div><div class="lb-name">${escapeHtml(e.player_name)}${aceTag}</div><div class="lb-dist">${e.is_hole_in_one ? 'HIO' : e.distance + ' ft'}</div></div>`;
         });
-        if (leaderboard.ownScore) {
+        if (leaderboard.ownScore && !leaderboard.ownScore.in_top20) {
           const o = leaderboard.ownScore;
           rows += `<div class="lb-row me"><div class="lb-rank">#${o.rank}</div><div class="lb-name">You${o.is_hole_in_one ? '<span class="lb-ace">ACE</span>' : ''}</div><div class="lb-dist">${o.is_hole_in_one ? 'HIO' : o.distance + ' ft'}</div></div>`;
         }
@@ -469,7 +582,7 @@ async function main() {
     if (pastBtn) pastBtn.onclick = () => setTab('past');
     const hofBtn = document.getElementById('tab-hof');
     if (hofBtn) hofBtn.onclick = () => setTab('hof');
-    const claim = document.getElementById('claim-btn');
+    const claim = document.getElementById('join-ff-lb-btn');
     if (claim) claim.onclick = () => client.auth.redirectToLogin(window.location.href);
   }
 
@@ -485,6 +598,7 @@ async function main() {
     }
     html += '</div>';
     html += '<button class="share-btn" id="share-btn">Share Score</button>';
+    html += '<button class="replay-btn" id="view-lb-btn" style="margin-top:8px">View Leaderboard</button>';
     html += '<button class="replay-btn" id="scorecard-btn" style="margin-top:8px">View Scorecard</button>';
     if (isMember) {
       if (replayable) {
@@ -492,8 +606,8 @@ async function main() {
         html += '<p class="replay-warn">Replaying replaces your session and resets your tiebreak time.</p>';
       }
     } else {
-      html += '<button class="login-btn" id="claim-btn2" style="margin-top:8px">Claim your score</button>';
-      html += '<p class="hint">Sign up to join today\'s leaderboard.</p>';
+      html += '<button class="replay-btn" id="join-ff-btn" style="margin-top:8px">Join Foursome Finder</button>';
+      html += '<p class="hint">Find golf buddies, schedule rounds, and share availability.</p>';
     }
     // ── Tag Me: reward-framed social handle capture ──
     html += '<div class="tagme">';
@@ -510,15 +624,16 @@ async function main() {
     html += '</div>';
     ov.innerHTML = html;
     document.getElementById('share-btn').onclick = shareScore;
+    const vl = document.getElementById('view-lb-btn'); if (vl) vl.onclick = () => { playLeaderboardMusic(); document.getElementById('leaderboard').scrollIntoView({ behavior: 'smooth' }); };
     const sc = document.getElementById('scorecard-btn'); if (sc) sc.onclick = showImageCard;
     const rp = document.getElementById('replay-btn'); if (rp) rp.onclick = startReplay;
-    const c2 = document.getElementById('claim-btn2'); if (c2) c2.onclick = () => client.auth.redirectToLogin(window.location.href);
+    const jf = document.getElementById('join-ff-btn'); if (jf) jf.onclick = () => client.auth.redirectToLogin(window.location.href);
     // Pre-fill + wire the Tag Me inputs
     const igI = document.getElementById('tm-ig');
     const xI = document.getElementById('tm-x');
     const ttI = document.getElementById('tm-tt');
     if (igI) {
-      const init = isMember ? (user || {}) : (loadHeld() || {});
+      const init = isMember ? (user || {}) : (leaderboard.ownScore || {});
       igI.value = init.instagram_handle || '';
       xI.value = init.x_handle || '';
       ttI.value = init.tiktok_handle || '';
@@ -537,11 +652,11 @@ async function main() {
           const r = await client.functions.invoke('submit-game-score', { update_handles_only: true });
           if (r.data) { leaderboard = { top20: r.data.top20, ownScore: r.data.ownScore }; }
         } else {
-          const held = loadHeld() || { anonymous_id: guestId, best_distance: sessionResult.best_distance, ace_count: sessionResult.ace_count, shot_history: [], first_achieved_at: sessionResult.first_achieved_at, daily_seed: getDailySeed(), player_name: guestDisplayName };
-          saveHeld({ ...held, ...handles });
+          const r = await client.functions.invoke('submit-game-score', { update_handles_only: true, anonymous_id: guestId, ...handles });
+          if (r.data) { leaderboard = { top20: r.data.top20, ownScore: r.data.ownScore }; }
         }
         const saved = document.getElementById('tm-saved'); if (saved) saved.style.display = 'block';
-        if (isMember) renderLeaderboard();
+        renderLeaderboard();
       } catch { /* silent */ }
       tmSave.disabled = false; tmSave.textContent = 'Save & tag me';
     };
@@ -550,7 +665,7 @@ async function main() {
   function renderAll() { renderLeaderboard(); renderResultOverlay(); }
 
   const lbBtn = document.getElementById('lb-scroll-btn');
-  if (lbBtn) lbBtn.onclick = () => document.getElementById('leaderboard').scrollIntoView({ behavior: 'smooth' });
+  if (lbBtn) lbBtn.onclick = () => { playLeaderboardMusic(); document.getElementById('leaderboard').scrollIntoView({ behavior: 'smooth' }); };
 
   renderAll();
 }
