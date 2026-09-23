@@ -92,11 +92,11 @@ const minigameHtml = `<!DOCTYPE html>
             water: [{type:"lake",x:85,y:280,r:75}],
             trees: [{x:335,y:200,r:16,h:28},{x:345,y:460,r:14,h:24}]
         },
-        { // Hole 3 (Wednesday) — River Crossing
+        { // Hole 3 (Wednesday) — Island Green
             name: 3, yardage: 150, greenX: 200, greenRadius: 72, teeX: 200,
-            bunkers: [{x:255,y:460,r:24}],
-            water: [{type:"river",y:385,width:42}],
-            trees: [{x:65,y:240,r:15,h:26},{x:335,y:240,r:15,h:26},{x:75,y:540,r:13,h:22}]
+            bunkers: [],
+            water: [{type:"lake",x:200,y:195,r:100}],
+            trees: [{x:65,y:420,r:15,h:26},{x:335,y:420,r:15,h:26},{x:75,y:560,r:13,h:22}]
         },
         { // Hole 4 (Thursday) — Bunker Beach
             name: 4, yardage: 135, greenX: 200, greenRadius: 68, teeX: 200,
@@ -119,11 +119,11 @@ const minigameHtml = `<!DOCTYPE html>
             water: [{type:"lake",x:200,y:200,r:115}],
             trees: [{x:65,y:555,r:14,h:24},{x:335,y:555,r:14,h:24}]
         },
-        { // Hole 7 (Sunday) — The Gauntlet
+        { // Hole 7 (Sunday) — Island Gauntlet
             name: 7, yardage: 170, greenX: 225, greenRadius: 62, teeX: 175,
-            bunkers: [{x:145,y:300,r:25},{x:285,y:215,r:22}],
-            water: [{type:"river",y:425,width:35},{type:"lake",x:100,y:505,r:42}],
-            trees: [{x:65,y:245,r:15,h:27},{x:345,y:355,r:16,h:28},{x:75,y:600,r:12,h:22}]
+            bunkers: [{x:150,y:420,r:25}],
+            water: [{type:"lake",x:225,y:131,r:95}],
+            trees: [{x:65,y:320,r:15,h:27},{x:345,y:320,r:16,h:28},{x:75,y:560,r:12,h:22}]
         }
     ];
 
@@ -271,7 +271,9 @@ const minigameHtml = `<!DOCTYPE html>
     }
 
     window.setGameHeading = function(numberLabel, subtitle) {
-        holeHeader.innerText = numberLabel || "Daily Par 3";
+        var header = numberLabel || "Daily Par 3";
+        if (hole.yardage) header += " \u2014 " + hole.yardage + " yards";
+        holeHeader.innerText = header;
         var sub = document.getElementById('hole-subtitle');
         if (sub) {
             sub.innerText = subtitle || "";
