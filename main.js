@@ -5,7 +5,7 @@ const SESSION_SHOTS = 5;
 const APP_ID = import.meta.env.VITE_BASE44_APP_ID;
 const ALLOWED_PARENT_ORIGINS = (import.meta.env.VITE_ALLOWED_PARENT_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
-const GAME_URL = 'https://play.foursomefinder.com';
+const GAME_URL = 'https://foursomefinder-minigame.vercel.app';
 
 let base44 = null;
 function getClient() {
@@ -153,8 +153,8 @@ async function main() {
     const yardage = gameConfig.conditions && gameConfig.conditions.yardage
       ? gameConfig.conditions.yardage : null;
     const dayLabel = gameConfig.dailyNumber > 0
-      ? `Daily Par 3 - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
-      : 'Daily Par 3 - Coming Soon';
+      ? `Daily Closest to the Pin Challenge - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
+      : 'Daily Closest to the Pin Challenge';
     document.getElementById('heading').textContent = yardage
       ? `${dayLabel} · ${yardage} yds`
       : dayLabel;
@@ -186,8 +186,8 @@ async function main() {
     try { win.setDailyConditions(gameConfig.holeIndex || 1, gameConfig.seed || dailySeed, gameConfig.conditions); } catch {}
     try { win.setShotsRemaining(0); } catch {}
     const label = gameConfig.dailyNumber > 0
-      ? `Daily Par 3 - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
-      : 'Daily Par 3 - Coming Soon';
+      ? `Daily Closest to the Pin Challenge - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
+      : 'Daily Closest to the Pin Challenge';
     try { win.setGameHeading(label, gameConfig.subtitle || ''); } catch {}
   });
   iframe.srcdoc = gameHtml;
@@ -376,6 +376,9 @@ async function main() {
   }
 
   function renderAll() { renderLeaderboard(); renderResultOverlay(); }
+
+  const lbBtn = document.getElementById('lb-scroll-btn');
+  if (lbBtn) lbBtn.onclick = () => document.getElementById('leaderboard').scrollIntoView({ behavior: 'smooth' });
 
   renderAll();
 }
