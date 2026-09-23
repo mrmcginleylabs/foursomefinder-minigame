@@ -150,9 +150,14 @@ async function main() {
   } catch { /* silent */ }
 
   function applyHeading() {
-    document.getElementById('heading').textContent = gameConfig.dailyNumber > 0
+    const yardage = gameConfig.conditions && gameConfig.conditions.yardage
+      ? gameConfig.conditions.yardage : null;
+    const dayLabel = gameConfig.dailyNumber > 0
       ? `Daily Par 3 - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
       : 'Daily Par 3 - Coming Soon';
+    document.getElementById('heading').textContent = yardage
+      ? `${dayLabel} · ${yardage} yds`
+      : dayLabel;
     const sub = document.getElementById('subtitle');
     if (gameConfig.subtitle) { sub.textContent = gameConfig.subtitle; sub.style.display = 'block'; }
     else { sub.style.display = 'none'; }
