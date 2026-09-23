@@ -105,8 +105,22 @@ async function main() {
           shot_history: held.shot_history,
           first_achieved_at: held.first_achieved_at,
           daily_seed: held.daily_seed,
+          instagram_handle: held.instagram_handle || '',
+          x_handle: held.x_handle || '',
+          tiktok_handle: held.tiktok_handle || '',
         });
-        if (r.data && r.data.migrated) clearHeld();
+        if (r.data && r.data.migrated) {
+          // Persist the guest's captured handles onto the new member's profile
+          // so future score snapshots include them.
+          try {
+            await client.auth.updateMe({
+              instagram_handle: held.instagram_handle || '',
+              x_handle: held.x_handle || '',
+              tiktok_handle: held.tiktok_handle || '',
+            });
+          } catch { /* silent */ }
+          clearHeld();
+        }
       } catch { /* silent */ }
     }
   }
@@ -305,11 +319,55 @@ async function main() {
       html += '<button class="login-btn" id="claim-btn2" style="margin-top:8px">Claim your score</button>';
       html += '<p class="hint">Sign up to join today\'s leaderboard.</p>';
     }
+    // ── Tag Me: reward-framed social handle capture ──
+    html += '<div class="tagme">';
+    html += '<h3>🏆 Get tagged if you win</h3>';
+    html += '<p class="tagme-sub">Add your socials so we can shout you out the moment you top today\'s board.</p>';
+    html += '<div class="tagme-inputs">';
+    html += '<input id="tm-ig" type="text" placeholder="Instagram @handle" autocomplete="off" />';
+    html += '<input id="tm-x" type="text" placeholder="X @handle" autocomplete="off" />';
+    html += '<input id="tm-tt" type="text" placeholder="TikTok @handle" autocomplete="off" />';
+    html += '</div>';
+    html += '<button class="tagme-btn" id="tm-save">Save &amp; tag me</button>';
+    html += '<p class="tagme-saved" id="tm-saved" style="display:none">Saved — you\'re taggable if you win today! 🎉</p>';
+    html += '</div>';
     html += '</div>';
     ov.innerHTML = html;
     document.getElementById('share-btn').onclick = shareScore;
     const rp = document.getElementById('replay-btn'); if (rp) rp.onclick = startReplay;
     const c2 = document.getElementById('claim-btn2'); if (c2) c2.onclick = () => client.auth.redirectToLogin(window.location.href);
+    // Pre-fill + wire the Tag Me inputs
+    const igI = document.getElementById('tm-ig');
+    const xI = document.getElementById('tm-x');
+    const ttI = document.getElementById('tm-tt');
+    if (igI) {
+      const init = isMember ? (user || {}) : (loadHeld() || {});
+      igI.value = init.instagram_handle || '';
+      xI.value = init.x_handle || '';
+      ttI.value = init.tiktok_handle || '';
+    }
+    const tmSave = document.getElementById('tm-save');
+    if (tmSave) tmSave.onclick = async () => {
+      const handles = {
+        instagram_handle: (igI?.value || '').trim().replace(/^@/, ''),
+        x_handle: (xI?.value || '').trim().replace(/^@/, ''),
+        tiktok_handle: (ttI?.value || '').trim().replace(/^@/, ''),
+      };
+      tmSave.disabled = true; tmSave.textContent = 'Saving…';
+      try {
+        if (isMember) {
+          await client.auth.updateMe(handles);
+          const r = await client.functions.invoke('submit-game-score', { update_handles_only: true });
+          if (r.data) { leaderboard = { top20: r.data.top20, ownScore: r.data.ownScore }; }
+        } else {
+          const held = loadHeld() || { anonymous_id: guestId, best_distance: sessionResult.best_distance, ace_count: sessionResult.ace_count, shot_history: [], first_achieved_at: sessionResult.first_achieved_at, daily_seed: getDailySeed(), player_name: guestDisplayName };
+          saveHeld({ ...held, ...handles });
+        }
+        const saved = document.getElementById('tm-saved'); if (saved) saved.style.display = 'block';
+        if (isMember) renderLeaderboard();
+      } catch { /* silent */ }
+      tmSave.disabled = false; tmSave.textContent = 'Save & tag me';
+    };
   }
 
   function renderAll() { renderLeaderboard(); renderResultOverlay(); }
