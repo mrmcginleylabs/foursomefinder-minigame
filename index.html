@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>4SF Par 3 Challenge</title>
+  <title>Daily Closest to the Pin Challenge</title>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -11,17 +11,27 @@
       background: #0a2612; color: #fff;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+    html { overflow-y: scroll; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(250,204,21,0.5); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(250,204,21,0.7); }
     #app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
     header { padding: 12px 16px; text-align: center; background: rgba(0,0,0,0.25); }
     header h1 { margin: 0; font-size: 20px; color: #facc15; letter-spacing: 1px; }
     header .sub { font-size: 13px; color: #facc15; font-weight: bold; margin-top: 2px; }
     header .date { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px; }
 
-    #game-wrap { display: flex; justify-content: center; padding: 8px; }
+    #game-wrap { display: flex; justify-content: center; padding: 0; }
     #game {
-      width: 400px; max-width: 100%; height: 700px; max-height: 95vw;
-      border: 0; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      width: 100%; height: calc(100vh - 52px);
+      border: 0; border-radius: 0; box-shadow: none;
       background: #111;
+    }
+    #lb-scroll-btn-wrap { display: flex; justify-content: center; padding: 12px 0; }
+    #lb-scroll-btn {
+      padding: 10px 28px; border: 1px solid rgba(250,204,21,0.4); border-radius: 999px;
+      background: rgba(250,204,21,0.1); color: #facc15; font-weight: bold; font-size: 14px; cursor: pointer;
     }
 
     #leaderboard { padding: 12px 16px 48px; }
@@ -85,12 +95,15 @@
   <div id="boot"><div class="spin"></div></div>
   <div id="app" style="display:none">
     <header>
-      <h1 id="heading">Daily Par 3</h1>
+      <h1 id="heading">Daily Closest to the Pin Challenge</h1>
       <div class="sub" id="subtitle" style="display:none"></div>
       <div class="date" id="date-label"></div>
     </header>
     <div id="game-wrap">
       <iframe id="game" title="Par 3 Challenge"></iframe>
+    </div>
+    <div id="lb-scroll-btn-wrap">
+      <button id="lb-scroll-btn">Leaderboard ↓</button>
     </div>
     <div id="leaderboard"></div>
   </div>
