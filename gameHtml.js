@@ -374,6 +374,7 @@ const minigameHtml = `<!DOCTYPE html>
     };
 
     let isDragging = false, hasDragged = false, dragStartX = 0, initialAim = 0;
+    let firstInteractionFired = false;
 
     function getClientX(e) { return e.touches ? e.touches[0].clientX : e.clientX; }
 
@@ -390,6 +391,10 @@ const minigameHtml = `<!DOCTYPE html>
 
     function handleDown(e) {
         initAudio();
+        if (!firstInteractionFired && window.onFirstInteraction) {
+            firstInteractionFired = true;
+            window.onFirstInteraction();
+        }
         if (gameState === 0) {
             const coords = getCanvasCoords(e);
             if (isLeaderboardArrowTap(coords.x, coords.y)) {
