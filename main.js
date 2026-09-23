@@ -89,7 +89,21 @@ async function main() {
 
   document.getElementById('date-label').textContent = `${dateLabel} · Closest to the Pin`;
 
-  await requestParentToken();
+  // Read the auth token from the URL hash (passed by the parent iframe).
+  // This is the primary, most reliable method — no postMessage round-trip or
+  // origin-check env var needed. The hash is cleaned from the URL afterwards.
+  const hashParams = new URLSearchParams(window.location.hash.slice(1));
+  const hashToken = hashParams.get('token');
+  if (hashToken) {
+    try { localStorage.setItem('base44_access_token', hashToken); } catch {}
+    try { if (client.auth.setToken) client.auth.setToken(hashToken); } catch {}
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
+  // Fall back to postMessage if no hash token (direct visit or older parent)
+  if (!hashToken) {
+    await requestParentToken();
+  }
 
   let user = null, isMember = false;
   try { user = await client.auth.me(); isMember = !!user; } catch { user = null; isMember = false; }
@@ -248,6 +262,28 @@ async function main() {
 
   function shareScore() {
     const isHoleInOne = sessionResult.best_distance === 0;
+    const shareText = `🎯 ${isHoleInOne ? 'Hole in One' : sessionResult.best_distance + ' ft from pin'} on Closest to the Pin Challenge! Can you beat me?`;
+    const shareUrl = 'https://foursomefinder.com/play';
+
+    // If embedded in the parent app, delegate the share via postMessage.
+    // navigator.share works reliably from the top-level page context, not
+    // inside a cross-origin iframe — so the parent handles the actual share.
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: '4SF_SHARE', text: shareText, url: shareUrl }, '*');
+      return;
+    }
+
+    // Standalone (direct visit) — try navigator.share, fall back to image card
+    if (navigator.share) {
+      navigator.share({ text: shareText, url: shareUrl, title: 'Closest to the Pin Challenge' })
+        .catch(() => showImageCard());
+    } else {
+      showImageCard();
+    }
+  }
+
+  function showImageCard() {
+    const isHoleInOne = sessionResult.best_distance === 0;
     shareCardImage({
       playerName: isMember ? (user?.full_name || 'You') : guestDisplayName,
       distance: sessionResult.best_distance,
@@ -325,6 +361,7 @@ async function main() {
     }
     html += '</div>';
     html += '<button class="share-btn" id="share-btn">Share Score</button>';
+    html += '<button class="replay-btn" id="scorecard-btn" style="margin-top:8px">View Scorecard</button>';
     if (isMember) {
       if (replayable) {
         html += '<button class="replay-btn" id="replay-btn">Play Again</button>';
@@ -349,6 +386,7 @@ async function main() {
     html += '</div>';
     ov.innerHTML = html;
     document.getElementById('share-btn').onclick = shareScore;
+    const sc = document.getElementById('scorecard-btn'); if (sc) sc.onclick = showImageCard;
     const rp = document.getElementById('replay-btn'); if (rp) rp.onclick = startReplay;
     const c2 = document.getElementById('claim-btn2'); if (c2) c2.onclick = () => client.auth.redirectToLogin(window.location.href);
     // Pre-fill + wire the Tag Me inputs
