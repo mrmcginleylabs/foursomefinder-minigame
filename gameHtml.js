@@ -16,12 +16,12 @@ const minigameHtml = `<!DOCTYPE html>
             touch-action: none; user-select: none;
         }
         #game-container {
-            position: relative; width: 400px; height: 700px;
-            max-width: 100%; max-height: 100%;
+            position: relative; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
             box-shadow: 0 0 20px rgba(0,0,0,0.8);
             background-color: #111; overflow: hidden;
         }
-        canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+        canvas { display: block; max-width: 100%; max-height: 100%; cursor: pointer; }
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%;
             pointer-events: none; padding: 20px; box-sizing: border-box; text-align: center;
@@ -51,7 +51,7 @@ const minigameHtml = `<!DOCTYPE html>
 <div id="game-container">
     <canvas id="gameCanvas" width="400" height="700"></canvas>
     <div id="ui-layer">
-        <h1 id="hole-header">Daily Par 3</h1>
+        <h1 id="hole-header">Daily Closest to the Pin Challenge</h1>
         <p id="hole-subtitle" style="margin:2px 0 0 0;font-size:14px;color:#facc15;font-weight:bold;text-shadow:1px 1px 2px #000;display:none"></p>
     </div>
     <div id="warning-overlay">
@@ -271,8 +271,7 @@ const minigameHtml = `<!DOCTYPE html>
     }
 
     window.setGameHeading = function(numberLabel, subtitle) {
-        var header = numberLabel || "Daily Par 3";
-        if (hole.yardage) header += " \u2014 " + hole.yardage + " yards";
+        var header = hole.yardage ? hole.yardage + " Yards" : "";
         holeHeader.innerText = header;
         var sub = document.getElementById('hole-subtitle');
         if (sub) {
@@ -340,7 +339,7 @@ const minigameHtml = `<!DOCTYPE html>
             wind.angle = deg * Math.PI / 180;
         }
 
-        holeHeader.innerText = "Hole " + activeHole.name + " - " + yardage + " Yards";
+        holeHeader.innerText = yardage + " Yards";
         resetGame();
     };
 
