@@ -355,7 +355,7 @@ const minigameHtml = `<!DOCTYPE html>
     }
 
     function isLeaderboardArrowTap(x, y) {
-        return x >= 10 && x <= 80 && y >= 580 && y <= 650;
+        return x >= 48 && x <= 90 && y >= 570 && y <= 650;
     }
 
     function handleDown(e) {
@@ -693,7 +693,7 @@ const minigameHtml = `<!DOCTYPE html>
 
         // Power / accuracy meters
         if (gameState < 3) {
-            const meterX = 25, meterY = 150, meterW = 40, meterH = 400;
+            const meterX = 55, meterY = 150, meterW = 24, meterH = 400;
             ctx.fillStyle = 'rgba(17, 17, 17, 0.8)'; ctx.fillRect(meterX, meterY, meterW, meterH);
             ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(meterX, meterY, meterW, meterH);
             ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.textAlign = 'left';
@@ -710,7 +710,7 @@ const minigameHtml = `<!DOCTYPE html>
             pg.addColorStop(0, "#4ade80"); pg.addColorStop(0.5, "#facc15"); pg.addColorStop(1, "#ef4444");
             ctx.fillStyle = pg; ctx.fillRect(meterX, fillY, meterW, fillHeight);
             if (gameState >= 1) {
-                const accX = 50, accY = canvas.height - 40, accW = 300, accH = 20;
+                const accX = 65, accY = canvas.height - 40, accW = 285, accH = 20;
                 ctx.fillStyle = 'rgba(17, 17, 17, 0.8)'; ctx.fillRect(accX, accY, accW, accH);
                 ctx.strokeStyle = '#fff'; ctx.strokeRect(accX, accY, accW, accH);
                 ctx.fillStyle = '#4ade80'; ctx.fillRect(accX + accW/2 - 10, accY, 20, accH);
@@ -726,26 +726,26 @@ const minigameHtml = `<!DOCTYPE html>
             ctx.font = 'bold 20px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillText(shotsRemainingText, 45, 580);
+            ctx.fillText(shotsRemainingText, 67, 580);
             ctx.fillStyle = '#fff';
-            ctx.fillText(shotsRemainingText, 45, 578);
+            ctx.fillText(shotsRemainingText, 67, 578);
             // Bouncing down-arrow with "Leaderboard" label pointing below
             const bounceY = Math.sin(Date.now() / 300) * 4;
             const hintY = 598 + bounceY;
             // "Leaderboard" label
             ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillText('Leaderboard', 45, hintY + 2);
+            ctx.fillText('Leaderboard', 67, hintY + 2);
             ctx.fillStyle = '#facc15';
-            ctx.fillText('Leaderboard', 45, hintY + 1);
+            ctx.fillText('Leaderboard', 67, hintY + 1);
             // Larger down arrow below the text
             ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.beginPath();
-            ctx.moveTo(45, hintY + 8);
-            ctx.lineTo(45, hintY + 24);
-            ctx.lineTo(36, hintY + 15);
-            ctx.moveTo(45, hintY + 24);
-            ctx.lineTo(54, hintY + 15);
+            ctx.moveTo(67, hintY + 8);
+            ctx.lineTo(67, hintY + 24);
+            ctx.lineTo(58, hintY + 15);
+            ctx.moveTo(67, hintY + 24);
+            ctx.lineTo(76, hintY + 15);
             ctx.stroke();
         }
 
