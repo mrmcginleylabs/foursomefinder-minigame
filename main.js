@@ -1,5 +1,6 @@
 import { createClient } from '@base44/sdk';
 import gameHtml from './gameHtml.js';
+import { shareCardImage } from './shareCard.js';
 
 const SESSION_SHOTS = 5;
 const APP_ID = import.meta.env.VITE_BASE44_APP_ID;
@@ -152,12 +153,17 @@ async function main() {
   function applyHeading() {
     const yardage = gameConfig.conditions && gameConfig.conditions.yardage
       ? gameConfig.conditions.yardage : null;
-    const dayLabel = gameConfig.dailyNumber > 0
-      ? `Daily Closest to the Pin Challenge - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
-      : 'Daily Closest to the Pin Challenge';
-    document.getElementById('heading').textContent = yardage
-      ? `${dayLabel} · ${yardage} yds`
-      : dayLabel;
+    const numLabel = gameConfig.dailyNumber > 0
+      ? `#${String(gameConfig.dailyNumber).padStart(3, '0')}`
+      : '';
+    const headingText = numLabel && yardage
+      ? `${numLabel} - ${yardage} Yards`
+      : numLabel
+        ? numLabel
+        : yardage
+          ? `${yardage} Yards`
+          : 'Daily Closest to the Pin';
+    document.getElementById('heading').textContent = headingText;
     const sub = document.getElementById('subtitle');
     if (gameConfig.subtitle) { sub.textContent = gameConfig.subtitle; sub.style.display = 'block'; }
     else { sub.style.display = 'none'; }
@@ -185,10 +191,15 @@ async function main() {
     };
     try { win.setDailyConditions(gameConfig.holeIndex || 1, gameConfig.seed || dailySeed, gameConfig.conditions); } catch {}
     try { win.setShotsRemaining(0); } catch {}
-    const label = gameConfig.dailyNumber > 0
-      ? `Daily Closest to the Pin Challenge - #${String(gameConfig.dailyNumber).padStart(3, '0')}`
-      : 'Daily Closest to the Pin Challenge';
-    try { win.setGameHeading(label, gameConfig.subtitle || ''); } catch {}
+    const numLabel = gameConfig.dailyNumber > 0
+      ? `#${String(gameConfig.dailyNumber).padStart(3, '0')}`
+      : '';
+    const yardage = gameConfig.conditions && gameConfig.conditions.yardage
+      ? gameConfig.conditions.yardage : null;
+    const gameLabel = numLabel && yardage
+      ? `${numLabel} - ${yardage} Yards`
+      : numLabel || (yardage ? `${yardage} Yards` : 'Daily Closest to the Pin');
+    try { win.setGameHeading(gameLabel, gameConfig.subtitle || ''); } catch {}
   });
   iframe.srcdoc = gameHtml;
 
@@ -236,16 +247,15 @@ async function main() {
   }
 
   function shareScore() {
-    const dist = sessionResult.best_distance === 0 ? 'Hole in One' : `${sessionResult.best_distance} ft from pin`;
-    const cond = gameConfig.conditions ? `${gameConfig.conditions.yardage} yds · ${gameConfig.conditions.windSpeed}mph wind` : '';
-    const text = `4SF Daily Par 3 #${String(gameConfig.dailyNumber).padStart(3, '0')} — ${dist}${sessionResult.ace_count > 0 ? ` · ${sessionResult.ace_count} ace(s)` : ''}.${cond ? ` ${cond}.` : ''}\nPlay: ${GAME_URL}`;
-    if (navigator.share) {
-      navigator.share({ title: '4SF Par 3 Challenge', text, url: GAME_URL }).catch(() => {});
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => alert('Score copied to clipboard!'), () => alert(text));
-    } else {
-      alert(text);
-    }
+    const isHoleInOne = sessionResult.best_distance === 0;
+    shareCardImage({
+      playerName: isMember ? (user?.full_name || 'You') : guestDisplayName,
+      distance: sessionResult.best_distance,
+      isHoleInOne,
+      aceCount: sessionResult.ace_count,
+      dateLabel,
+      dailyNumber: gameConfig.dailyNumber,
+    });
   }
 
   function renderLeaderboard() {
