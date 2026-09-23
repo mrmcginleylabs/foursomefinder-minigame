@@ -77,7 +77,7 @@ const minigameHtml = `<!DOCTYPE html>
     const holeHeader = document.getElementById('hole-header');
 
     let gameState = 0;
-    const pxPerYard = 3.2;
+    const pxPerYard = 3.0; // tuned so 195-yard holes still fit on the 700px canvas
 
     // === 7 hole definitions — one per weekday (Mon=1 ... Sun=7) ===
     const HOLE_DEFS = [
@@ -296,6 +296,43 @@ const minigameHtml = `<!DOCTYPE html>
         return templateDefaults;
     }
 
+    // --- Deterministic fallback PRNG (mulberry32, same as the backend) ---
+    // When server conditions are missing, these produce the SAME wind and slope
+    // for every player on the same day (seeded by the ET date string), so the
+    // game never randomizes differently per-refresh or per-player.
+    function mulberry32(seedStr) {
+        let a = 0;
+        for (let i = 0; i < seedStr.length; i++) {
+            a = (Math.imul(31, a) + seedStr.charCodeAt(i)) | 0;
+        }
+        a = a >>> 0;
+        return function () {
+            a = (a + 0x6D2B79F5) | 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+    // Compute conditions using the EXACT SAME PRNG sequence as the server, so
+    // fallback values are identical to server values when the API call fails.
+    // Server (shared/miniGame.ts → getDailyConditions) uses one mulberry32
+    // seeded by "date|conditions" and calls rand() 7 times in order.
+    function deterministicConditions(seedStr) {
+        const rand = mulberry32(String(seedStr) + "|conditions");
+        const yardage = Math.round(105 + rand() * 90); // 105-195 (matches backend)
+        const pinNormX = (rand() * 1.4) - 0.7;
+        const pinNormY = (rand() * 1.4) - 0.7;
+        const windSpeed = Math.floor(rand() * 21); // 0-20 mph
+        let windAngleDeg = Math.floor(rand() * 360);
+        const VA = 25;
+        if (windAngleDeg > 90 - VA && windAngleDeg < 90 + VA) windAngleDeg = windAngleDeg < 90 ? 90 - VA : 90 + VA;
+        else if (windAngleDeg > 270 - VA && windAngleDeg < 270 + VA) windAngleDeg = windAngleDeg < 270 ? 270 - VA : 270 + VA;
+        const slopeX = (rand() * 0.006) - 0.003;
+        const slopeY = (rand() * 0.006) - 0.003;
+        return { yardage, pinNormX, pinNormY, windSpeed, windAngleDeg, slopeX, slopeY };
+    }
+
     window.setDailyConditions = function(holeIndex, seed, conditions) {
         // Copy the template so reassigning its hazard arrays never mutates HOLE_DEFS.
         activeHole = { ...HOLE_DEFS[Math.max(0, Math.min(6, (holeIndex || 1) - 1))] };
@@ -303,14 +340,17 @@ const minigameHtml = `<!DOCTYPE html>
         green.radius = activeHole.greenRadius;
         tee.x = activeHole.teeX;
 
+        // If server conditions are missing, compute them locally using the
+        // EXACT SAME PRNG sequence as the server — so fallback values are
+        // identical and conditions never appear to change on refresh.
+        const cond = conditions || deterministicConditions(seed || '');
+
         const def = captureTemplateDefaults();
         const baseGreenY = tee.y - (def.yardage * pxPerYard);
 
-        // Daily yardage (tee-to-green-center, 90-165). Shift the green up/down
-        // from the template's designed position and drag every hazard along,
-        // so each template's layout (bunkers/water/trees vs green) stays intact
-        // at any distance.
-        const yardage = (conditions && conditions.yardage) ? conditions.yardage : def.yardage;
+        // Daily yardage — shift the green up/down from the template's designed
+        // position and drag every hazard along so the layout stays intact.
+        const yardage = cond.yardage;
         green.y = tee.y - (yardage * pxPerYard);
         const dy = green.y - baseGreenY;
 
@@ -318,26 +358,16 @@ const minigameHtml = `<!DOCTYPE html>
         activeHole.water = def.water.map(w => ({ ...w, y: w.y + dy }));
         activeHole.trees = def.trees.map(t => ({ x: t.x, y: t.y + dy, r: t.r, h: t.h }));
 
-        // Pin placement: server gives normalized -0.7..0.7 offsets, scaled by green radius.
-        const pinNormX = (conditions && typeof conditions.pinNormX === "number") ? conditions.pinNormX : 0;
-        const pinNormY = (conditions && typeof conditions.pinNormY === "number") ? conditions.pinNormY : 0;
-        hole.x = green.x + pinNormX * green.radius;
-        hole.y = green.y + pinNormY * green.radius;
+        // Pin placement: normalized -0.7..0.7 offsets, scaled by green radius.
+        hole.x = green.x + cond.pinNormX * green.radius;
+        hole.y = green.y + cond.pinNormY * green.radius;
         hole.yardage = yardage;
 
-        // Wind: server gives speed (mph) + angle (degrees).
-        wind.speed = (conditions && typeof conditions.windSpeed === "number") ? conditions.windSpeed : Math.floor(Math.random() * 12) + 4;
-        if (conditions && typeof conditions.windAngleDeg === "number") {
-            wind.angle = conditions.windAngleDeg * Math.PI / 180;
-        } else {
-            // Fallback: never blow straight up/down — keep at least 25° off vertical
-            // so every shot drifts left-to-right or right-to-left.
-            let deg = Math.floor(Math.random() * 360);
-            const VA = 25;
-            if (deg > 90 - VA && deg < 90 + VA) deg = deg < 90 ? 90 - VA : 90 + VA;
-            else if (deg > 270 - VA && deg < 270 + VA) deg = deg < 270 ? 270 - VA : 270 + VA;
-            wind.angle = deg * Math.PI / 180;
-        }
+        // Wind + slope: all from the same deterministic conditions object.
+        wind.speed = cond.windSpeed;
+        wind.angle = cond.windAngleDeg * Math.PI / 180;
+        green.slopeX = cond.slopeX;
+        green.slopeY = cond.slopeY;
 
         holeHeader.innerText = yardage + " Yards";
         resetGame();
@@ -803,8 +833,10 @@ const minigameHtml = `<!DOCTYPE html>
     loop();
     window.resetGame = resetGame;
 
+    // Wait for the parent (main.js) to call setDailyConditions with the real
+    // server-provided daily conditions. Do NOT generate random conditions here —
+    // every player must see the same wind, yardage, pin, and slope each day.
     if (window.onGameReady) { window.onGameReady(); }
-    else { window.setDailyConditions(1, "test-seed-123"); }
 <\/script>
 </body>
 </html>`;
